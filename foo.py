@@ -13,9 +13,15 @@ import time
 params = sys.argv
 pubKey = os.getenv('PICUS_PUBKEY', "pubkey not assigned")
 ec2 = boto3.resource('ec2')
+client = boto3.client('ec2')
+
+# customers = [{'customerId': "a11f4af4b693", "instances": []}]
+
+for c in customers:
+    print(c['customerId'])
+    print(c['instances'])
 
 def create(customerId):
-    # print(customerId)
     if params[4] == "--node-type" and params[5] == "Manager":
         instance = ec2.create_instances(
             ImageId='ami-4ae27e22',
@@ -41,12 +47,10 @@ def create(customerId):
                 }
             }])
     print instance[0].id
-    # print(os.environ)
 
 def listNodes(customerId):
-    print(customerId)
     for i in ec2.instances.all():
-        if i.state['Name'] != 'terminated':
+        if i.state['Name'] != 'terminated' and i.public_ip_address is not None:
             print(i.id + '\t' + i.state['Name'] + '\t' + i.public_ip_address)
 
 def createSnap(instanceId):
@@ -57,8 +61,6 @@ def createSnap(instanceId):
                 Description='Trial snapshot'
             )
             snapshot.create_tags(Resources=[snapshot.id], Tags=[{'Key': 'Name', 'Value': 'snapshot-' + i.block_device_mappings[0]['Ebs']['VolumeId']}])
-            # for s in ec2.snapshots.all():
-            #     print(s.id)
             print(snapshot.id)
 
 def listBackups(instanceId):
@@ -85,20 +87,34 @@ def rollBack(snapshotId, instanceId):
     print(ec2.Instance(instanceId).id)
 
 def listAll():
-    print("all")
+    for i in ec2.instances.all():
+        if i.state['Name'] != 'terminated' and i.public_ip_address is not None:
+            print(i.id + '\t' + i.state['Name'] + '\t' + i.public_ip_address)
+
+def executeScript(paramType, paramVal, scriptPath):
+    if paramType == "--customer-id":
+        print(paramType)
+    elif paramType == "--node-type":
+        print(paramType)
 
 if len(params) > 3:
     if params[1] == "create" and params[2] == "--customer-id":
-        create(params[3])
+        for c in customers:
+            if c['customerId'] == params[3]:
+                create(params[3])
     elif params[1] == "list-nodes" and params[2] == "--customer-id":
-        listNodes(params[3])
-    elif params[1] == "list-all":
-        listAll()
+        for c in customers:
+            if c['customerId'] == params[3]:
+                listNodes(params[3])
     elif params[1] == "backup" and params[2] == "--node-id":
         createSnap(params[3])
     elif params[1] == "list-backups" and params[2] == "--node-id":
         listBackups(params[3])
     elif params[1] == "rollback" and params[2] == "--backup-id":
         rollBack(params[3], params[5])
+    elif params[1] == "execute" and (params[2] == "--customer-id" or params[2] == "--node-type") and params[4] == "--script":
+        executeScript(params[2], params[3], params[5])
+elif params[1] == "list-all":
+    listAll()
 else:
     print("invalid arguments")
